@@ -404,11 +404,27 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     if (index > widget.itemCount - 1) {
       index = widget.itemCount - 1;
     }
-    setState(() {
-      primary.scrollController.jumpTo(0);
-      primary.target = index;
-      primary.alignment = alignment;
-    });
+
+    if (primary.scrollController.position.maxScrollExtent -
+            primary.scrollController.position.minScrollExtent >
+        primary.scrollController.position.viewportDimension) {
+      // 当消息充满一个视窗时
+      setState(() {
+        primary.scrollController.jumpTo(0);
+        primary.target = index;
+        if (index == widget.itemCount - 1) {
+          primary.alignment = 1.0;
+        } else {
+          primary.alignment = alignment;
+        }
+      });
+    } else {
+      // 当消息不足一个视窗时, 不能调用ScrollController.jumpTo(0);否则消息列表会回弹
+      setState(() {
+        primary.target = index;
+        primary.alignment = alignment;
+      });
+    }
   }
 
   Future<void> _scrollTo({
