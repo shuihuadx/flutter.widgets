@@ -195,6 +195,10 @@ class ItemScrollController {
     _scrollableListState!._jumpTo(index: index, alignment: alignment);
   }
 
+  void jumpToBottom() {
+    _scrollableListState!._jumpToBottom();
+  }
+
   /// Animate the list over [duration] using the given [curve] such that the
   /// item at [index] ends up with its leading edge at the given [alignment].
   /// See [jumpTo] for an explanation of alignment.
@@ -265,8 +269,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     super.initState();
     ItemPosition? initialPosition = PageStorage.of(context)!.readState(context);
     primary.target = initialPosition?.index ?? widget.initialScrollIndex;
-    primary.alignment =
-        initialPosition?.itemLeadingEdge ?? widget.initialAlignment;
+    primary.alignment = initialPosition?.itemLeadingEdge ?? widget.initialAlignment;
     if (widget.itemCount > 0 && primary.target > widget.itemCount - 1) {
       primary.target = widget.itemCount - 1;
     }
@@ -283,10 +286,8 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
 
   @override
   void dispose() {
-    primary.itemPositionsNotifier.itemPositions
-        .removeListener(_updatePositions);
-    secondary.itemPositionsNotifier.itemPositions
-        .removeListener(_updatePositions);
+    primary.itemPositionsNotifier.itemPositions.removeListener(_updatePositions);
+    secondary.itemPositionsNotifier.itemPositions.removeListener(_updatePositions);
     super.dispose();
   }
 
@@ -399,32 +400,25 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
         widget.minCacheExtent ?? 0,
       );
 
+  void _jumpToBottom() {
+    _stopScroll(canceled: true);
+    setState(() {
+      primary.alignment = 1.0;
+      primary.target = widget.itemCount + 1;
+      primary.scrollController.jumpTo(0);
+    });
+  }
+
   void _jumpTo({required int index, required double alignment}) {
     _stopScroll(canceled: true);
     if (index > widget.itemCount - 1) {
       index = widget.itemCount - 1;
     }
-
-    if (primary.scrollController.position.maxScrollExtent -
-            primary.scrollController.position.minScrollExtent >
-        primary.scrollController.position.viewportDimension) {
-      // 当消息充满一个视窗时
-      setState(() {
-        primary.scrollController.jumpTo(0);
-        primary.target = index;
-        if (index == widget.itemCount - 1) {
-          primary.alignment = 1.0;
-        } else {
-          primary.alignment = alignment;
-        }
-      });
-    } else {
-      // 当消息不足一个视窗时, 不能调用ScrollController.jumpTo(0);否则消息列表会回弹
-      setState(() {
-        primary.target = index;
-        primary.alignment = alignment;
-      });
-    }
+    setState(() {
+      primary.scrollController.jumpTo(0);
+      primary.target = index;
+      primary.alignment = alignment;
+    });
   }
 
   Future<void> _scrollTo({
@@ -468,8 +462,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
   }) async {
     final direction = index > primary.target ? 1 : -1;
     final itemPosition = primary.itemPositionsNotifier.itemPositions.value
-        .firstWhereOrNull(
-            (ItemPosition itemPosition) => itemPosition.index == index);
+        .firstWhereOrNull((ItemPosition itemPosition) => itemPosition.index == index);
     if (itemPosition != null) {
       // Scroll directly.
       final localScrollAmount = itemPosition.itemLeadingEdge *
@@ -481,28 +474,26 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
           duration: duration,
           curve: curve);
     } else {
-      final scrollAmount = _screenScrollCount *
-          primary.scrollController.position.viewportDimension;
+      final scrollAmount =
+          _screenScrollCount * primary.scrollController.position.viewportDimension;
       final startCompleter = Completer<void>();
       final endCompleter = Completer<void>();
       startAnimationCallback = () {
         SchedulerBinding.instance!.addPostFrameCallback((_) {
           startAnimationCallback = () {};
 
-          opacity.parent = _opacityAnimation(opacityAnimationWeights).animate(
-              AnimationController(vsync: this, duration: duration)..forward());
+          opacity.parent = _opacityAnimation(opacityAnimationWeights)
+              .animate(AnimationController(vsync: this, duration: duration)..forward());
           secondary.scrollController.jumpTo(-direction *
-              (_screenScrollCount *
-                      primary.scrollController.position.viewportDimension -
-                  alignment *
-                      secondary.scrollController.position.viewportDimension));
+              (_screenScrollCount * primary.scrollController.position.viewportDimension -
+                  alignment * secondary.scrollController.position.viewportDimension));
 
           startCompleter.complete(primary.scrollController.animateTo(
               primary.scrollController.offset + direction * scrollAmount,
               duration: duration,
               curve: curve));
-          endCompleter.complete(secondary.scrollController
-              .animateTo(0, duration: duration, curve: curve));
+          endCompleter.complete(
+              secondary.scrollController.animateTo(0, duration: duration, curve: curve));
         });
       };
       setState(() {
@@ -549,28 +540,24 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     final endOpacity = 1.0;
     return TweenSequence<double>(<TweenSequenceItem<double>>[
       TweenSequenceItem<double>(
-          tween: ConstantTween<double>(startOpacity),
-          weight: opacityAnimationWeights[0]),
+          tween: ConstantTween<double>(startOpacity), weight: opacityAnimationWeights[0]),
       TweenSequenceItem<double>(
           tween: Tween<double>(begin: startOpacity, end: endOpacity),
           weight: opacityAnimationWeights[1]),
       TweenSequenceItem<double>(
-          tween: ConstantTween<double>(endOpacity),
-          weight: opacityAnimationWeights[2]),
+          tween: ConstantTween<double>(endOpacity), weight: opacityAnimationWeights[2]),
     ]);
   }
 
   void _updatePositions() {
-    final itemPositions = primary.itemPositionsNotifier.itemPositions.value
-        .where((ItemPosition position) =>
+    final itemPositions = primary.itemPositionsNotifier.itemPositions.value.where(
+        (ItemPosition position) =>
             position.itemLeadingEdge < 1 && position.itemTrailingEdge > 0);
     if (itemPositions.isNotEmpty) {
       PageStorage.of(context)!.writeState(
           context,
           itemPositions.reduce((value, element) =>
-              value.itemLeadingEdge < element.itemLeadingEdge
-                  ? value
-                  : element));
+              value.itemLeadingEdge < element.itemLeadingEdge ? value : element));
     }
     widget.itemPositionsNotifier?.itemPositions.value = itemPositions;
   }

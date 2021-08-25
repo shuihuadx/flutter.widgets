@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -12,6 +14,7 @@ import 'element_registry.dart';
 import 'item_positions_listener.dart';
 import 'item_positions_notifier.dart';
 import 'scroll_view.dart';
+import 'sliver_prototype_extent_list2.dart' as MySliver;
 
 /// A list of widgets similar to [ListView], except scroll control
 /// and position reporting is based on index rather than pixel offset.
@@ -44,7 +47,7 @@ class PositionedList extends StatefulWidget {
     this.addAutomaticKeepAlives = true,
   })  : assert(itemCount != null),
         assert(itemBuilder != null),
-        assert((positionedIndex == 0) || (positionedIndex < itemCount));
+        assert((positionedIndex == 0) || (positionedIndex < itemCount + 2));
 
   /// Number of items the [itemBuilder] can produce.
   final int itemCount;
@@ -163,42 +166,50 @@ class _PositionedListState extends State<PositionedList> {
           reverse: widget.reverse,
           cacheExtent: widget.cacheExtent,
           physics: widget.physics,
-          semanticChildCount: widget.semanticChildCount ?? widget.itemCount,
+          semanticChildCount: (widget.semanticChildCount ?? widget.itemCount) + 2,
           slivers: <Widget>[
             if (widget.positionedIndex > 0)
               SliverPadding(
                 padding: _leadingSliverPadding,
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) => widget.separatorBuilder == null
-                        ? _buildItem(widget.positionedIndex - (index + 1))
-                        : _buildSeparatedListElement(
-                            2 * widget.positionedIndex - (index + 1)),
+                    (context, index) {
+                      int actualCount = min(widget.positionedIndex, widget.itemCount);
+                      if (widget.separatorBuilder == null) {
+                        return _buildItem(actualCount - (index + 1));
+                      } else {
+                        return _buildSeparatedListElement(2 * actualCount - (index + 1));
+                      }
+                    },
                     childCount: widget.separatorBuilder == null
-                        ? widget.positionedIndex
-                        : 2 * widget.positionedIndex,
+                        ? min(widget.positionedIndex, widget.itemCount)
+                        : 2 * min(widget.positionedIndex, widget.itemCount),
                     addSemanticIndexes: false,
                     addRepaintBoundaries: widget.addRepaintBoundaries,
                     addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
                   ),
                 ),
               ),
-            SliverPadding(
-              key: _centerKey,
-              padding: _centerSliverPadding,
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => widget.separatorBuilder == null
-                      ? _buildItem(index + widget.positionedIndex)
-                      : _buildSeparatedListElement(
-                          index + 2 * widget.positionedIndex),
-                  childCount: widget.itemCount != 0 ? 1 : 0,
-                  addSemanticIndexes: false,
-                  addRepaintBoundaries: widget.addRepaintBoundaries,
-                  addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
+            if (widget.positionedIndex < widget.itemCount)
+              SliverPadding(
+                key: _centerKey,
+                padding: _centerSliverPadding,
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => widget.separatorBuilder == null
+                        ? _buildItem(index + widget.positionedIndex)
+                        : _buildSeparatedListElement(index + 2 * widget.positionedIndex),
+                    childCount: widget.positionedIndex >= widget.itemCount
+                        ? 0
+                        : widget.itemCount != 0
+                            ? 1
+                            : 0,
+                    addSemanticIndexes: false,
+                    addRepaintBoundaries: widget.addRepaintBoundaries,
+                    addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
+                  ),
                 ),
               ),
-            ),
             if (widget.positionedIndex >= 0 &&
                 widget.positionedIndex < widget.itemCount - 1)
               SliverPadding(
@@ -210,14 +221,43 @@ class _PositionedListState extends State<PositionedList> {
                         : _buildSeparatedListElement(
                             index + 2 * widget.positionedIndex + 1),
                     childCount: widget.separatorBuilder == null
-                        ? widget.itemCount - widget.positionedIndex - 1
-                        : 2 * (widget.itemCount - widget.positionedIndex - 1),
+                        ? max(widget.itemCount - widget.positionedIndex - 1, 0)
+                        : 2 * max(widget.itemCount - widget.positionedIndex - 1, 0),
                     addSemanticIndexes: false,
                     addRepaintBoundaries: widget.addRepaintBoundaries,
                     addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
                   ),
                 ),
               ),
+            // 用于占位的Sliver
+            MySliver.SliverPrototypeExtentList(
+              key: widget.positionedIndex == widget.itemCount ? _centerKey : null,
+              prototypeItem: ListView.builder(
+                itemBuilder: (BuildContext context, int index) {
+                  return widget.itemBuilder(context, index);
+                },
+                // 这里预计最多15条内容就可以充满一个ViewPort
+                itemCount: min(widget.itemCount, 15),
+                shrinkWrap: true,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (content, index) {
+                  return RegisteredElementWidget(
+                    key: ValueKey(widget.itemCount),
+                    child: Container(),
+                  );
+                },
+                childCount: 1,
+              ),
+            ),
+            // 方便jump to Bottom 的逻辑
+            SliverToBoxAdapter(
+              key: widget.positionedIndex == widget.itemCount + 1 ? _centerKey : null,
+              child: RegisteredElementWidget(
+                key: ValueKey(widget.itemCount + 1),
+                child: Container(height: 0),
+              ),
+            ),
           ],
         ),
       );
@@ -234,8 +274,7 @@ class _PositionedListState extends State<PositionedList> {
     return RegisteredElementWidget(
       key: ValueKey(index),
       child: widget.addSemanticIndexes
-          ? IndexedSemantics(
-              index: index, child: widget.itemBuilder(context, index))
+          ? IndexedSemantics(index: index, child: widget.itemBuilder(context, index))
           : widget.itemBuilder(context, index),
     );
   }
@@ -256,9 +295,7 @@ class _PositionedListState extends State<PositionedList> {
                   top: widget.positionedIndex == widget.itemCount - 1
                       ? widget.padding!.top
                       : 0,
-                  bottom: widget.positionedIndex == 0
-                      ? widget.padding!.bottom
-                      : 0) ??
+                  bottom: widget.positionedIndex == 0 ? widget.padding!.bottom : 0) ??
               EdgeInsets.all(0)
           : widget.padding?.copyWith(
                   top: widget.positionedIndex == 0 ? widget.padding!.top : 0,
@@ -271,9 +308,7 @@ class _PositionedListState extends State<PositionedList> {
                   left: widget.positionedIndex == widget.itemCount - 1
                       ? widget.padding!.left
                       : 0,
-                  right: widget.positionedIndex == 0
-                      ? widget.padding!.right
-                      : 0) ??
+                  right: widget.positionedIndex == 0 ? widget.padding!.right : 0) ??
               EdgeInsets.all(0)
           : widget.padding?.copyWith(
                 left: widget.positionedIndex == 0 ? widget.padding!.left : 0,
@@ -283,14 +318,13 @@ class _PositionedListState extends State<PositionedList> {
               ) ??
               EdgeInsets.all(0);
 
-  EdgeInsets get _trailingSliverPadding =>
-      widget.scrollDirection == Axis.vertical
-          ? widget.reverse
-              ? widget.padding?.copyWith(bottom: 0) ?? EdgeInsets.all(0)
-              : widget.padding?.copyWith(top: 0) ?? EdgeInsets.all(0)
-          : widget.reverse
-              ? widget.padding?.copyWith(right: 0) ?? EdgeInsets.all(0)
-              : widget.padding?.copyWith(left: 0) ?? EdgeInsets.all(0);
+  EdgeInsets get _trailingSliverPadding => widget.scrollDirection == Axis.vertical
+      ? widget.reverse
+          ? widget.padding?.copyWith(bottom: 0) ?? EdgeInsets.all(0)
+          : widget.padding?.copyWith(top: 0) ?? EdgeInsets.all(0)
+      : widget.reverse
+          ? widget.padding?.copyWith(right: 0) ?? EdgeInsets.all(0)
+          : widget.padding?.copyWith(left: 0) ?? EdgeInsets.all(0);
 
   void _schedulePositionNotificationUpdate() {
     if (!updateScheduled) {
@@ -308,18 +342,16 @@ class _PositionedListState extends State<PositionedList> {
           final ValueKey<int> key = element.widget.key as ValueKey<int>;
           if (widget.scrollDirection == Axis.vertical) {
             final reveal = viewport!.getOffsetToReveal(box, 0).offset;
-            final itemOffset = reveal -
-                viewport.offset.pixels +
-                viewport.anchor * viewport.size.height;
+            final itemOffset =
+                reveal - viewport.offset.pixels + viewport.anchor * viewport.size.height;
             positions.add(ItemPosition(
                 index: key.value,
-                itemLeadingEdge: itemOffset.round() /
-                    scrollController.position.viewportDimension,
+                itemLeadingEdge:
+                    itemOffset.round() / scrollController.position.viewportDimension,
                 itemTrailingEdge: (itemOffset + box.size.height).round() /
                     scrollController.position.viewportDimension));
           } else {
-            final itemOffset =
-                box.localToGlobal(Offset.zero, ancestor: viewport).dx;
+            final itemOffset = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
             positions.add(ItemPosition(
                 index: key.value,
                 itemLeadingEdge: (widget.reverse
@@ -329,8 +361,7 @@ class _PositionedListState extends State<PositionedList> {
                         .round() /
                     scrollController.position.viewportDimension,
                 itemTrailingEdge: (widget.reverse
-                            ? scrollController.position.viewportDimension -
-                                itemOffset
+                            ? scrollController.position.viewportDimension - itemOffset
                             : (itemOffset + box.size.width))
                         .round() /
                     scrollController.position.viewportDimension));
