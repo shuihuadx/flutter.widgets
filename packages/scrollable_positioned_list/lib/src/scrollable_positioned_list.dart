@@ -270,8 +270,8 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     ItemPosition? initialPosition = PageStorage.of(context)!.readState(context);
     primary.target = initialPosition?.index ?? widget.initialScrollIndex;
     primary.alignment = initialPosition?.itemLeadingEdge ?? widget.initialAlignment;
-    if (widget.itemCount > 0 && primary.target > widget.itemCount - 1) {
-      primary.target = widget.itemCount - 1;
+    if (widget.itemCount > 0 && primary.target > widget.itemCount + 1) {
+      primary.target = widget.itemCount + 1;
     }
     widget.itemScrollController?._attach(this);
     primary.itemPositionsNotifier.itemPositions.addListener(_updatePositions);
@@ -308,14 +308,14 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
         secondary.target = 0;
       });
     } else {
-      if (primary.target > widget.itemCount - 1) {
+      if (primary.target > widget.itemCount + 1) {
         setState(() {
-          primary.target = widget.itemCount - 1;
+          primary.target = widget.itemCount + 1;
         });
       }
-      if (secondary.target > widget.itemCount - 1) {
+      if (secondary.target > widget.itemCount + 1) {
         setState(() {
-          secondary.target = widget.itemCount - 1;
+          secondary.target = widget.itemCount + 1;
         });
       }
     }
@@ -330,6 +330,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
         if (record.isInit &&
             primary.alignment == 0 &&
             primary.alignment == record.alignment &&
+            primary.target == record.target &&
             constraints.maxHeight != record.viewPortHeight) {
           double value;
           if (constraints.maxHeight > record.viewPortHeight) {
@@ -341,10 +342,15 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
             double panelHeight = record.viewPortHeight - constraints.maxHeight;
             value = record.offset + panelHeight;
           }
+          var tempAlignment = primary.alignment;
+          var tempTarget = primary.target;
           SchedulerBinding.instance!.addPostFrameCallback((_) {
-            value = max(value, primary.scrollController.position.minScrollExtent);
-            value = min(value, primary.scrollController.position.maxScrollExtent);
-            primary.scrollController.jumpTo(value);
+            // 有可能在布局重绘期间调用了scrollController.jump()方法, 会和当前代码冲突
+            if (primary.alignment == tempAlignment && primary.target == tempTarget) {
+              value = max(value, primary.scrollController.position.minScrollExtent);
+              value = min(value, primary.scrollController.position.maxScrollExtent);
+              primary.scrollController.jumpTo(value);
+            }
           });
         }
         final cacheExtent = _cacheExtent(constraints);
@@ -586,6 +592,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     record.offset = primary.scrollController.offset;
     record.viewPortHeight = primary.scrollController.position.viewportDimension;
     record.alignment = primary.alignment;
+    record.target = primary.target;
 
     widget.itemPositionsNotifier?.itemPositions.value = itemPositions;
   }
@@ -596,6 +603,7 @@ class _Record {
   double offset = 0;
   double viewPortHeight = 0;
   double alignment = 0;
+  int target = 0;
 }
 
 class _ListDisplayDetails {
