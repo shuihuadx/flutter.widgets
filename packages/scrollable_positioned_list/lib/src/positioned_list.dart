@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+import 'package:scrollable_positioned_list/src/sliver_prototype_extent_list2.dart';
 
 import 'element_registry.dart';
 import 'item_positions_listener.dart';
@@ -45,6 +46,7 @@ class PositionedList extends StatefulWidget {
     this.addSemanticIndexes = true,
     this.addRepaintBoundaries = true,
     this.addAutomaticKeepAlives = true,
+    this.prototypeExtentUpdate,
   })  : assert(itemCount != null),
         assert(itemBuilder != null),
         assert((positionedIndex == 0) || (positionedIndex < itemCount + 2));
@@ -122,6 +124,8 @@ class PositionedList extends StatefulWidget {
   ///
   /// See [SliverChildBuilderDelegate.addAutomaticKeepAlives].
   final bool addAutomaticKeepAlives;
+
+  final ItemExtentUpdate? prototypeExtentUpdate;
 
   @override
   State<StatefulWidget> createState() => _PositionedListState();
@@ -232,6 +236,7 @@ class _PositionedListState extends State<PositionedList> {
             // 用于占位的Sliver
             MySliver.SliverPrototypeExtentList(
               key: widget.positionedIndex == widget.itemCount ? _centerKey : null,
+              itemExtentUpdate: widget.prototypeExtentUpdate,
               prototypeItem: ListView.builder(
                 itemBuilder: (BuildContext context, int index) {
                   return widget.itemBuilder(context, index);

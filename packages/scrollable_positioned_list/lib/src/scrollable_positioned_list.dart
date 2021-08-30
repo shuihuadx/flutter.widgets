@@ -342,16 +342,23 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
             double panelHeight = record.viewPortHeight - constraints.maxHeight;
             value = record.offset + panelHeight;
           }
-          var tempAlignment = primary.alignment;
-          var tempTarget = primary.target;
-          SchedulerBinding.instance!.addPostFrameCallback((_) {
-            // 有可能在布局重绘期间调用了scrollController.jump()方法, 会和当前代码冲突
-            if (primary.alignment == tempAlignment && primary.target == tempTarget) {
-              value = max(value, primary.scrollController.position.minScrollExtent);
-              value = min(value, primary.scrollController.position.maxScrollExtent);
-              primary.scrollController.jumpTo(value);
-            }
-          });
+          if (primary.scrollController.position.minScrollExtent <= value
+              && value<= primary.scrollController.position.maxScrollExtent) {
+            // 如果修正后的offset在滚动的范围内,就在当前帧修正
+            primary.scrollController.position.correctPixels(value);
+          } else {
+            // 如果修正后的offset超出了滚动范围,就在下一帧修正
+            var tempAlignment = primary.alignment;
+            var tempTarget = primary.target;
+            SchedulerBinding.instance!.addPostFrameCallback((_) {
+              // 有可能在布局重绘期间调用了scrollController.jump()方法, 会和当前代码冲突
+              if (primary.alignment == tempAlignment && primary.target == tempTarget) {
+                value = max(value, primary.scrollController.position.minScrollExtent);
+                value = min(value, primary.scrollController.position.maxScrollExtent);
+                primary.scrollController.jumpTo(value);
+              }
+            });
+          }
         }
         final cacheExtent = _cacheExtent(constraints);
         return GestureDetector(
@@ -383,6 +390,9 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
                       padding: widget.padding,
                       addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
                       addRepaintBoundaries: widget.addRepaintBoundaries,
+                      prototypeExtentUpdate: (extent) {
+                        record.prototypeExtent = extent;
+                      }
                     ),
                   ),
                 ),
@@ -432,8 +442,19 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     _stopScroll(canceled: true);
     setState(() {
       primary.alignment = 1.0;
-      primary.target = widget.itemCount + 1;
       primary.scrollController.jumpTo(0);
+      if (record.isInit) {
+        if (record.prototypeExtent <= 0){
+          primary.target = widget.itemCount;
+        } else {
+          primary.target = widget.itemCount + 1;
+        }
+      } else {
+        primary.target = widget.itemCount + 1;
+        SchedulerBinding.instance!.addPostFrameCallback((_) {
+          _jumpToBottom();
+        });
+      }
     });
   }
 
@@ -604,6 +625,7 @@ class _Record {
   double viewPortHeight = 0;
   double alignment = 0;
   int target = 0;
+  double prototypeExtent = 0;
 }
 
 class _ListDisplayDetails {

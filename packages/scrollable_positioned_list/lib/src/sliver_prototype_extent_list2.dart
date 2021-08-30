@@ -7,6 +7,9 @@ import 'dart:math';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+
+typedef ItemExtentUpdate = void Function(double itemExtent);
+
 /// A sliver that places its box children in a linear array and constrains them
 /// to have the same extent as a prototype item along the main axis.
 ///
@@ -38,6 +41,7 @@ class SliverPrototypeExtentList extends SliverMultiBoxAdaptorWidget {
     Key? key,
     required SliverChildDelegate delegate,
     required this.prototypeItem,
+    this.itemExtentUpdate,
   })  : assert(prototypeItem != null),
         super(key: key, delegate: delegate);
 
@@ -49,11 +53,13 @@ class SliverPrototypeExtentList extends SliverMultiBoxAdaptorWidget {
   /// cannot respond to input.
   final Widget prototypeItem;
 
+  final ItemExtentUpdate? itemExtentUpdate;
+
   @override
   _RenderSliverPrototypeExtentList createRenderObject(BuildContext context) {
     final _SliverPrototypeExtentListElement element =
         context as _SliverPrototypeExtentListElement;
-    return _RenderSliverPrototypeExtentList(childManager: element);
+    return _RenderSliverPrototypeExtentList(childManager: element,itemExtentUpdate: itemExtentUpdate);
   }
 
   @override
@@ -128,7 +134,10 @@ class _SliverPrototypeExtentListElement extends SliverMultiBoxAdaptorElement {
 class _RenderSliverPrototypeExtentList extends RenderSliverFixedExtentBoxAdaptor {
   _RenderSliverPrototypeExtentList({
     required _SliverPrototypeExtentListElement childManager,
+    this.itemExtentUpdate,
   }) : super(childManager: childManager);
+
+  final ItemExtentUpdate? itemExtentUpdate;
 
   RenderBox? _child;
 
@@ -174,12 +183,15 @@ class _RenderSliverPrototypeExtentList extends RenderSliverFixedExtentBoxAdaptor
   @override
   double get itemExtent {
     assert(child != null && child!.hasSize);
+    double result = 0;
     if (constraints.axis == Axis.vertical) {
       var axis = constraints.viewportMainAxisExtent - child!.size.height;
-      return max(axis, 0);
+      result = max(axis, 0);
     } else {
       var axis = constraints.viewportMainAxisExtent - child!.size.width;
-      return max(axis, 0);
+      result = max(axis, 0);
     }
+    itemExtentUpdate?.call(result);
+    return result;
   }
 }
