@@ -320,10 +320,45 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     }
   }
 
+  _Record record = _Record();
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (record.isInit &&
+            primary.alignment == 0 &&
+            primary.alignment == record.alignment &&
+            primary.target == record.target &&
+            constraints.maxHeight != record.viewPortHeight) {
+          double value;
+          if (constraints.maxHeight > record.viewPortHeight) {
+            // 面板收窄, 恢复消息位置, 消息向上滚动
+            double panelHeight = constraints.maxHeight - record.viewPortHeight;
+            value = record.offset - panelHeight;
+          } else {
+            // 面板扩展, 面板遮挡底部内容, 消息向下滚动
+            double panelHeight = record.viewPortHeight - constraints.maxHeight;
+            value = record.offset + panelHeight;
+          }
+          if (primary.scrollController.position.minScrollExtent <= value
+              && value<= primary.scrollController.position.maxScrollExtent) {
+            // 如果修正后的offset在滚动的范围内,就在当前帧修正
+            primary.scrollController.position.correctPixels(value);
+          } else {
+            // 如果修正后的offset超出了滚动范围,就在下一帧修正
+            var tempAlignment = primary.alignment;
+            var tempTarget = primary.target;
+            SchedulerBinding.instance!.addPostFrameCallback((_) {
+              // 有可能在布局重绘期间调用了scrollController.jump()方法, 会和当前代码冲突
+              if (primary.alignment == tempAlignment && primary.target == tempTarget) {
+                value = max(value, primary.scrollController.position.minScrollExtent);
+                value = min(value, primary.scrollController.position.maxScrollExtent);
+                primary.scrollController.jumpTo(value);
+              }
+            });
+          }
+        }
         final cacheExtent = _cacheExtent(constraints);
         return GestureDetector(
           onPanDown: (_) => _stopScroll(canceled: true),
@@ -572,8 +607,23 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
                   ? value
                   : element));
     }
+
+    record.isInit = true;
+    record.offset = primary.scrollController.offset;
+    record.viewPortHeight = primary.scrollController.position.viewportDimension;
+    record.alignment = primary.alignment;
+    record.target = primary.target;
+
     widget.itemPositionsNotifier?.itemPositions.value = itemPositions;
   }
+}
+
+class _Record {
+  bool isInit = false;
+  double offset = 0;
+  double viewPortHeight = 0;
+  double alignment = 0;
+  int target = 0;
 }
 
 class _ListDisplayDetails {
