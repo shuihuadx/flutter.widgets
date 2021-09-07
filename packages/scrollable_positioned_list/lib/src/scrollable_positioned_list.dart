@@ -195,6 +195,11 @@ class ItemScrollController {
     _scrollableListState!._jumpTo(index: index, alignment: alignment);
   }
 
+  /// 内容是否充满一个视窗
+  bool isFullOnePage() {
+    return _scrollableListState!._isFullOnePage();
+  }
+
   /// Animate the list over [duration] using the given [curve] such that the
   /// item at [index] ends up with its leading edge at the given [alignment].
   /// See [jumpTo] for an explanation of alignment.
@@ -441,8 +446,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     }
 
     if (primary.scrollController.position.maxScrollExtent -
-            primary.scrollController.position.minScrollExtent >
-        primary.scrollController.position.viewportDimension) {
+            primary.scrollController.position.minScrollExtent > 0) {
       // 当消息充满一个视窗时
       setState(() {
         primary.scrollController.jumpTo(0);
@@ -460,6 +464,12 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
         primary.alignment = alignment;
       });
     }
+  }
+
+  /// 内容是否充满一个视窗
+  bool _isFullOnePage() {
+    return primary.scrollController.position.maxScrollExtent -
+        primary.scrollController.position.minScrollExtent > 0;
   }
 
   Future<void> _scrollTo({
