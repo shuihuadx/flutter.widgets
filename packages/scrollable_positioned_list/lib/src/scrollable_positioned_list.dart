@@ -332,6 +332,20 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     return LayoutBuilder(
       builder: (context, constraints) {
         if (record.isInit &&
+            primary.alignment == 1 &&
+            primary.alignment == record.alignment &&
+            primary.target == record.target &&
+            constraints.maxHeight > record.viewPortHeight) {
+          // 锚点位于底部, 并且下一帧是收起面板
+          double scrollContentHeight = primary.scrollController.position.maxScrollExtent -
+              primary.scrollController.position.minScrollExtent;
+          if (scrollContentHeight > 0 &&
+              scrollContentHeight < constraints.maxHeight - record.viewPortHeight) {
+            // 当面板弹出时,内容超过一个视窗,并且收起面板时,内容不足一个视窗
+            // 则将锚点设置为顶部
+            primary.alignment = 0;
+          }
+        } else if (record.isInit &&
             primary.alignment == 0 &&
             primary.alignment == record.alignment &&
             primary.target == record.target &&
