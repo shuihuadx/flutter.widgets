@@ -339,7 +339,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
           // 锚点位于底部, 并且下一帧是收起面板
           double scrollContentHeight = primary.scrollController.position.maxScrollExtent -
               primary.scrollController.position.minScrollExtent;
-          if (scrollContentHeight > 0 &&
+          if (scrollContentHeight >= 0 &&
               scrollContentHeight < constraints.maxHeight - record.viewPortHeight) {
             // 当面板弹出时,内容超过一个视窗,并且收起面板时,内容不足一个视窗
             // 则将锚点设置为顶部
