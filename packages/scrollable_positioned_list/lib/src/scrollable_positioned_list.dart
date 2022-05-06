@@ -472,10 +472,10 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
         }
       });
     } else {
-      // 当消息不足一个视窗时, 不能调用ScrollController.jumpTo(0);否则消息列表会回弹
+      // 当消息不足一个视窗时, 将消息列表归位
       setState(() {
-        primary.target = index;
-        primary.alignment = alignment;
+        primary.target = 0;
+        primary.alignment = 0.0;
       });
     }
   }
